@@ -2,6 +2,9 @@
 #include "keys.h" 
 #include <ESP8266WiFi.h>
 
+#define FLOATCHARS "01234567890."
+#define FAIL_FLOAT 200.0f
+
 void setup() {
   // Setup pins 
   // TODO: set pins
@@ -74,18 +77,91 @@ void loop() {
       return;
     }
   }
-  
+
+  String line;
   // Read all the lines of the reply from server and print them to Serial
   while(client.available()){
-    String line = client.readStringUntil('\r');
+    line = client.readStringUntil('\r');
     Serial.print(line);
   }
   
+  Serial.print("Temperature: ");
+  Serial.println(getValueFromJson(line, "Temperature"));
   Serial.println();
+  Serial.print("Total rain: ");
+  Serial.println(getValueFromJson(line, "TotalLiquid"));
+  Serial.print("Daylight: ");
+  Serial.println(getPosition(line, "true", 0) || 0);
   Serial.println("closing connection");
   delay(10000000);
 }
 
+
+float getValueFromJson(String json, String needle) {
+  // First look for the expected param from position 0
+  unsigned int pos = getPosition(json, needle, 0);
+
+  // Failure!
+  if (pos == 0) {
+    return FAIL_FLOAT;
+  }
+
+  // Look for the Value
+  pos = getPosition(json, "Value", pos);
+  // Failure!
+  if (pos == 0) {
+    return FAIL_FLOAT;
+  }
+
+  // Yay now try parsing a number
+  String floatMatch = "";
+  Serial.println("Starting search for float");
+  for(; pos <= json.length(); pos++){
+    if (charInString(json[pos], FLOATCHARS)) {
+      floatMatch += json[pos];
+    }
+    else if (floatMatch != "") {
+      return floatMatch.toFloat();
+    }
+  }
+  return FAIL_FLOAT;
+} 
+
+bool charInString(char needle, String haystack) {
+  for (unsigned int i = 0; i <= haystack.length(); i++) {
+    if (needle == haystack[i]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+unsigned int getPosition(String in, String needle, unsigned int i) {
+  // Look for value
+  // parse next object for "Value" 
+  // parse real value and return
+  unsigned int matching = 0;
+  
+  for(; i <= in.length(); i++) {
+    // Check for matching char
+    if (in[i] == needle[matching]) {
+      if (++matching >= needle.length()) {
+        // w00t total match found
+        Serial.print(needle);
+        Serial.println(" found!");
+        return ++i;
+      }      
+    } 
+    else {
+      // Otherwise always reset matching
+      matching = 0;
+    }
+  }
+
+  // Return 0 to indicate failure
+  // (position 0 in json won't make sense anyway...)
+  return 0;
+}
 
 /*
  * [
