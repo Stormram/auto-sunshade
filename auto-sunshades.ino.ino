@@ -1,59 +1,49 @@
-// Not giving these ^^
-#include "keys.h" 
 #include <ESP8266WiFi.h>
 
+// Not giving these ^^
+#include "keys.h"
+
 #define FLOATCHARS "01234567890."
+#define TEMPERATURE_THRESHOLD 19.0f
 #define FAIL_FLOAT 200.0f
 
+/*
+   {locationKey} as last param of url
+   GET: "http://dataservice.accuweather.com/forecasts/v1/hourly/1hour/{location_id}"
+   required: apiKey
+   optional: language, details, metric
+*/
+#define FORECAST_API_URL "http://dataservice.accuweather.com/forecasts/v1/hourly/1hour/247518?details=true&metric=true&"
+
 void setup() {
-  // Setup pins 
-  // TODO: set pins
+  // Setup pins
   pinMode(2, OUTPUT);
+  pinMode(0, OUTPUT);
 
   // Serial for debugging :D
   Serial.begin(115200);
   delay(10);
 
   // We start by connecting to a WiFi network
-
   Serial.println();
   Serial.println();
   Serial.print("Connecting to ");
   Serial.println(WIFI_SSID);
-  
-  /* Explicitly set the ESP8266 to be a WiFi-client, otherwise, it by default,
-     would try to act as both a client and an access-point and could cause
-     network-issues with your other WiFi-devices on your WiFi-network. */
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_KEY);
-  
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
 
-  Serial.println("");
-  Serial.println("WiFi connected");  
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+  connectWiFi(WIFI_SSID, WIFI_KEY);
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  digitalWrite(2, HIGH);   // turn the LED on (HIGH is the voltage level)
-  delay(1000);              // wait for a second
-  digitalWrite(2, LOW);    // turn the LED off by making the voltage LOW
-  delay(1000);              // wait for a second
-
+  Serial.println("Starting program");
   /*
-   * Get request example: https://raw.githubusercontent.com/esp8266/Arduino/master/libraries/ESP8266WiFi/examples/WiFiClient/WiFiClient.ino
-   */
-  delay(5000);
+     Get request example: https://raw.githubusercontent.com/esp8266/Arduino/master/libraries/ESP8266WiFi/examples/WiFiClient/WiFiClient.ino
+  */
+  delay(10);
 
-  const char * host = "dataservice.accuweather.com"; 
+  const char * host = "dataservice.accuweather.com";
   Serial.print("connecting to ");
   Serial.println(host);
-  
+
   // Use WiFiClient class to create TCP connections
   WiFiClient client;
   const int httpPort = 80;
@@ -61,13 +51,13 @@ void loop() {
     Serial.println("connection failed");
     return;
   }
-  
+
   Serial.print("Requesting URL: ");
   Serial.println(FORECAST_API_URL);
-  
+
   // This will send the request to the server
-  client.print(String("GET ") + FORECAST_API_URL + " HTTP/1.1\r\n" +
-               "Host: " + host + "\r\n" + 
+  client.print(String("GET ") + FORECAST_API_URL + API_KEY + " HTTP/1.1\r\n" +
+               "Host: " + host + "\r\n" +
                "Connection: close\r\n\r\n");
   unsigned long timeout = millis();
   while (client.available() == 0) {
@@ -80,22 +70,87 @@ void loop() {
 
   String line;
   // Read all the lines of the reply from server and print them to Serial
-  while(client.available()){
+  while (client.available()) {
     line = client.readStringUntil('\r');
     Serial.print(line);
   }
-  
-  Serial.print("Temperature: ");
-  Serial.println(getValueFromJson(line, "Temperature"));
-  Serial.println();
-  Serial.print("Total rain: ");
-  Serial.println(getValueFromJson(line, "TotalLiquid"));
-  Serial.print("Daylight: ");
-  Serial.println(getPosition(line, "true", 0) || 0);
-  Serial.println("closing connection");
-  delay(10000000);
+
+  float temperature = getValueFromJson(line, "Temperature");
+  float mmRain = getValueFromJson(line, "TotalLiquid");
+  bool sunLight = getPosition(line, "true", 0) || 0;
+
+  if (temperature == FAIL_FLOAT || mmRain == FAIL_FLOAT) {
+    Serial.println("Parsing failed, closing shades as best effort");
+    closeShades();
+    // TODO, deep sleep shorter!
+  }
+
+  // Close shades when there is not sunLight, there might be rain or
+  // the temperature is to low
+  if (!sunLight || mmRain >= 0.1f || temperature <= TEMPERATURE_THRESHOLD) {
+    closeShades();
+  }
+  else {
+    openShades();
+  }
+
+  Serial.println("Good night, sleep tight, don't let the bedbugs bite.");
+  // 1 second
+  // TODO: http://hackaday.com/2015/02/08/hack-allows-esp-01-to-go-to-deep-sleep/
+  // ESP.deepSleep(1e6, WAKE_RF_DEFAULT); needs soldering
+  FakeDeepSleep(1e3);
 }
 
+void connectWiFi(const char* ssid, const char* key) {
+  /* Explicitly set the ESP8266 to be a WiFi-client, otherwise, it by default,
+     would try to act as both a client and an access-point and could cause
+     network-issues with your other WiFi-devices on your WiFi-network. */
+  WiFi.mode(WIFI_STA);
+  delay(10);
+  WiFi.begin(ssid, key);
+
+  unsigned long timeout = millis();
+  while (WiFi.status() != WL_CONNECTED) {
+    // Timeout after 10 seconds
+    if (millis() - timeout > 10000) {
+      // Don't know what went wrong
+      // Sometimes this part just hangs forever.
+      Serial.println("Hanging, resetting");
+      ESP.restart();
+    }
+
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+void FakeDeepSleep(unsigned long duration) {
+  WiFi.mode(WIFI_OFF);
+  WiFi.forceSleepBegin();
+  delay(duration);
+  ESP.restart();
+}
+
+void closeShades() {
+  // Closing shades is attached to GPIO2
+  Serial.println("Closing shades");
+  digitalWrite(2, HIGH);
+  delay(1000);
+  digitalWrite(2, LOW);
+}
+
+void openShades() {
+  // Opening shades is attached to GPIO2
+  Serial.println("Opening shades");
+  digitalWrite(0, HIGH);
+  delay(1000);
+  digitalWrite(0, LOW);
+}
 
 float getValueFromJson(String json, String needle) {
   // First look for the expected param from position 0
@@ -116,7 +171,7 @@ float getValueFromJson(String json, String needle) {
   // Yay now try parsing a number
   String floatMatch = "";
   Serial.println("Starting search for float");
-  for(; pos <= json.length(); pos++){
+  for (; pos <= json.length(); pos++) {
     if (charInString(json[pos], FLOATCHARS)) {
       floatMatch += json[pos];
     }
@@ -125,7 +180,7 @@ float getValueFromJson(String json, String needle) {
     }
   }
   return FAIL_FLOAT;
-} 
+}
 
 bool charInString(char needle, String haystack) {
   for (unsigned int i = 0; i <= haystack.length(); i++) {
@@ -138,11 +193,11 @@ bool charInString(char needle, String haystack) {
 
 unsigned int getPosition(String in, String needle, unsigned int i) {
   // Look for value
-  // parse next object for "Value" 
+  // parse next object for "Value"
   // parse real value and return
   unsigned int matching = 0;
-  
-  for(; i <= in.length(); i++) {
+
+  for (; i <= in.length(); i++) {
     // Check for matching char
     if (in[i] == needle[matching]) {
       if (++matching >= needle.length()) {
@@ -150,8 +205,8 @@ unsigned int getPosition(String in, String needle, unsigned int i) {
         Serial.print(needle);
         Serial.println(" found!");
         return ++i;
-      }      
-    } 
+      }
+    }
     else {
       // Otherwise always reset matching
       matching = 0;
@@ -164,7 +219,7 @@ unsigned int getPosition(String in, String needle, unsigned int i) {
 }
 
 /*
- * [
+   [
   {
     "DateTime": "2017-06-08T22:00:00+02:00",
     "EpochDateTime": 1496952000,
@@ -251,5 +306,5 @@ unsigned int getPosition(String in, String needle, unsigned int i) {
     "MobileLink": "http://m.accuweather.com/en/nl/heerenveen/247518/hourly-weather-forecast/247518?day=1&unit=c&lang=en-us",
     "Link": "http://www.accuweather.com/en/nl/heerenveen/247518/hourly-weather-forecast/247518?day=1&hbhhour=22&unit=c&lang=en-us"
   }
-]
- */
+  ]
+*/
