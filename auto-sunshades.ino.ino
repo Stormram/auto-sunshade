@@ -7,13 +7,13 @@
 #define TEMPERATURE_THRESHOLD 19.0f
 #define FAIL_FLOAT 200.0f
 
-/*
-   {locationKey} as last param of url
-   GET: "http://dataservice.accuweather.com/forecasts/v1/hourly/1hour/{location_id}"
-   required: apiKey
-   optional: language, details, metric
-*/
-#define FORECAST_API_URL "http://dataservice.accuweather.com/forecasts/v1/hourly/1hour/247518?details=true&metric=true&"
+/**
+ * {locationKey} as last param of url
+ * GET: "http://dataservice.accuweather.com/forecasts/v1/hourly/1hour/{location_id}"
+ * required: apiKey
+ * optional: language, details, metric
+ */
+#define FORECAST_API_URL String("http://dataservice.accuweather.com/forecasts/v1/hourly/1hour/247518?apikey=") + API_KEY + "&details=true&metric=true"
 
 void setup() {
   // Setup pins
@@ -56,7 +56,7 @@ void loop() {
   Serial.println(FORECAST_API_URL);
 
   // This will send the request to the server
-  client.print(String("GET ") + FORECAST_API_URL + API_KEY + " HTTP/1.1\r\n" +
+  client.print(String("GET ") + FORECAST_API_URL + " HTTP/1.1\r\n" +
                "Host: " + host + "\r\n" +
                "Connection: close\r\n\r\n");
   unsigned long timeout = millis();
@@ -74,15 +74,21 @@ void loop() {
     line = client.readStringUntil('\r');
     Serial.print(line);
   }
-
+  Serial.println();
+  
   float temperature = getValueFromJson(line, "Temperature");
   float mmRain = getValueFromJson(line, "TotalLiquid");
   bool sunLight = getPosition(line, "true", 0) || 0;
 
+  printVar("temp: ", temperature);
+  printVar("rain: ", mmRain);
+  printVar("isDay: ", sunLight);
+
   if (temperature == FAIL_FLOAT || mmRain == FAIL_FLOAT) {
     Serial.println("Parsing failed, closing shades as best effort");
     closeShades();
-    // TODO, deep sleep shorter!
+    FakeDeepSleep(60*60e3); // once per hour
+    return;
   }
 
   // Close shades when there is not sunLight, there might be rain or
@@ -95,10 +101,9 @@ void loop() {
   }
 
   Serial.println("Good night, sleep tight, don't let the bedbugs bite.");
-  // 1 second
   // TODO: http://hackaday.com/2015/02/08/hack-allows-esp-01-to-go-to-deep-sleep/
   // ESP.deepSleep(1e6, WAKE_RF_DEFAULT); needs soldering
-  FakeDeepSleep(1e3);
+  FakeDeepSleep(60*60e3); // once per hour
 }
 
 void connectWiFi(const char* ssid, const char* key) {
@@ -170,7 +175,7 @@ float getValueFromJson(String json, String needle) {
 
   // Yay now try parsing a number
   String floatMatch = "";
-  Serial.println("Starting search for float");
+  //Serial.println("Starting search for float");
   for (; pos <= json.length(); pos++) {
     if (charInString(json[pos], FLOATCHARS)) {
       floatMatch += json[pos];
@@ -183,6 +188,8 @@ float getValueFromJson(String json, String needle) {
 }
 
 bool charInString(char needle, String haystack) {
+  // Looks if the given char is in the String
+  // Returns true if found and false otherwise
   for (unsigned int i = 0; i <= haystack.length(); i++) {
     if (needle == haystack[i]) {
       return true;
@@ -192,9 +199,11 @@ bool charInString(char needle, String haystack) {
 }
 
 unsigned int getPosition(String in, String needle, unsigned int i) {
-  // Look for value
-  // parse next object for "Value"
-  // parse real value and return
+  /**
+   * Search for the given `needle` in the string
+   * returns the last position of the char found in `in`
+   * returns 0 if not found
+   */
   unsigned int matching = 0;
 
   for (; i <= in.length(); i++) {
@@ -202,8 +211,8 @@ unsigned int getPosition(String in, String needle, unsigned int i) {
     if (in[i] == needle[matching]) {
       if (++matching >= needle.length()) {
         // w00t total match found
-        Serial.print(needle);
-        Serial.println(" found!");
+        //Serial.print(needle);
+        //Serial.println(" found!");
         return ++i;
       }
     }
@@ -218,7 +227,18 @@ unsigned int getPosition(String in, String needle, unsigned int i) {
   return 0;
 }
 
-/*
+void printVar(String msg, float var) {
+  Serial.print(msg);
+  Serial.println(var);
+}
+
+void printVar(String msg, bool var) {
+  Serial.print(msg);
+  Serial.println(var);
+}
+
+/**
+ * Example output:
    [
   {
     "DateTime": "2017-06-08T22:00:00+02:00",
@@ -308,3 +328,4 @@ unsigned int getPosition(String in, String needle, unsigned int i) {
   }
   ]
 */
+
