@@ -8,7 +8,7 @@
 #define FAIL_FLOAT 200.0f
 
 #define UP_GPIO 14
-#define DOWN_GPIO 4
+#define DOWN_GPIO 12
 
 /**
  * {locationKey} as last param of url
