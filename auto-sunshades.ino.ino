@@ -7,6 +7,9 @@
 #define TEMPERATURE_THRESHOLD 19.0f
 #define FAIL_FLOAT 200.0f
 
+#define UP_GPIO 14
+#define DOWN_GPIO 4
+
 /**
  * {locationKey} as last param of url
  * GET: "http://dataservice.accuweather.com/forecasts/v1/hourly/1hour/{location_id}"
@@ -17,8 +20,11 @@
 
 void setup() {
   // Setup pins
-  pinMode(2, OUTPUT);
-  pinMode(0, OUTPUT);
+  pinMode(UP_GPIO,   OUTPUT);
+  pinMode(DOWN_GPIO, OUTPUT);
+  
+  digitalWrite(UP_GPIO, LOW);
+  digitalWrite(UP_GPIO, LOW);
 
   // Serial for debugging :D
   Serial.begin(115200);
@@ -144,17 +150,17 @@ void FakeDeepSleep(unsigned long duration) {
 void closeShades() {
   // Closing shades is attached to GPIO2
   Serial.println("Closing shades");
-  digitalWrite(2, HIGH);
+  digitalWrite(DOWN_GPIO, HIGH);
   delay(1000);
-  digitalWrite(2, LOW);
+  digitalWrite(DOWN_GPIO, LOW);
 }
 
 void openShades() {
   // Opening shades is attached to GPIO2
   Serial.println("Opening shades");
-  digitalWrite(0, HIGH);
+  digitalWrite(UP_GPIO, HIGH);
   delay(1000);
-  digitalWrite(0, LOW);
+  digitalWrite(UP_GPIO, LOW);
 }
 
 float getValueFromJson(String json, String needle) {
