@@ -4,7 +4,8 @@
 #include "keys.h"
 
 #define FLOATCHARS "01234567890."
-#define TEMPERATURE_THRESHOLD 19.0f
+#define TEMPERATURE_THRESHOLD 18.0f
+#define WIND_THRESHOLD 25.0f
 #define FAIL_FLOAT 200.0f
 
 #define UP_GPIO 14
@@ -84,22 +85,24 @@ void loop() {
   
   float temperature = getValueFromJson(line, "Temperature");
   float mmRain = getValueFromJson(line, "TotalLiquid");
+  float windSpeed = getValueFromJson(line, "Wind");
   bool sunLight = getPosition(line, "true", 0) || 0;
 
   printVar("temp: ", temperature);
+  printVar("wind: ", windSpeed);
   printVar("rain: ", mmRain);
   printVar("isDay: ", sunLight);
 
   if (temperature == FAIL_FLOAT || mmRain == FAIL_FLOAT) {
     Serial.println("Parsing failed, closing shades as best effort");
     closeShades();
-    FakeDeepSleep(60*60e3); // once per hour
+    ESP.deepSleep(15*60*1e6); // once per 15 minutes
     return;
   }
 
   // Close shades when there is not sunLight, there might be rain or
   // the temperature is to low
-  if (!sunLight || mmRain >= 0.1f || temperature <= TEMPERATURE_THRESHOLD) {
+  if (!sunLight || mmRain >= 0.1f || temperature <= TEMPERATURE_THRESHOLD || windSpeed >= WIND_THRESHOLD) {
     closeShades();
   }
   else {
@@ -107,9 +110,7 @@ void loop() {
   }
 
   Serial.println("Good night, sleep tight, don't let the bedbugs bite.");
-  // TODO: http://hackaday.com/2015/02/08/hack-allows-esp-01-to-go-to-deep-sleep/
-  // ESP.deepSleep(1e6, WAKE_RF_DEFAULT); needs soldering
-  FakeDeepSleep(60*60e3); // once per hour
+  ESP.deepSleep(30*60*1e6); // once per half hour
 }
 
 void connectWiFi(const char* ssid, const char* key) {
@@ -148,19 +149,17 @@ void FakeDeepSleep(unsigned long duration) {
 }
 
 void closeShades() {
-  // Closing shades is attached to GPIO2
   Serial.println("Closing shades");
-  digitalWrite(DOWN_GPIO, HIGH);
-  delay(1000);
-  digitalWrite(DOWN_GPIO, LOW);
-}
-
-void openShades() {
-  // Opening shades is attached to GPIO2
-  Serial.println("Opening shades");
   digitalWrite(UP_GPIO, HIGH);
   delay(1000);
   digitalWrite(UP_GPIO, LOW);
+}
+
+void openShades() {
+  Serial.println("Opening shades");
+  digitalWrite(DOWN_GPIO, HIGH);
+  delay(1000);
+  digitalWrite(DOWN_GPIO, LOW);
 }
 
 float getValueFromJson(String json, String needle) {
