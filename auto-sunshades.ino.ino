@@ -7,6 +7,7 @@
 #define TEMPERATURE_THRESHOLD 18.0f
 #define WIND_THRESHOLD 25.0f
 #define FAIL_FLOAT 200.0f
+#define RAIN_CHANCE_THRESHOLD 30.0f
 
 #define UP_GPIO 14
 #define DOWN_GPIO 12
@@ -87,13 +88,15 @@ void loop() {
   float mmRain = getValueFromJson(line, "TotalLiquid");
   float windSpeed = getValueFromJson(line, "Wind");
   bool sunLight = getPosition(line, "true", 0) || 0;
-
+  float rainChance = getValueFromJsonSimple(line, "RainProbability");
+  
   printVar("temp: ", temperature);
   printVar("wind: ", windSpeed);
   printVar("rain: ", mmRain);
+  printVar("rain %", rainChance);
   printVar("isDay: ", sunLight);
 
-  if (temperature == FAIL_FLOAT || mmRain == FAIL_FLOAT) {
+  if (temperature == FAIL_FLOAT || mmRain == FAIL_FLOAT || rainChance == FAIL_FLOAT) {
     Serial.println("Parsing failed, closing shades as best effort");
     closeShades();
     ESP.deepSleep(15*60*1e6); // once per 15 minutes
@@ -102,7 +105,7 @@ void loop() {
 
   // Close shades when there is not sunLight, there might be rain or
   // the temperature is to low
-  if (!sunLight || mmRain >= 0.1f || temperature <= TEMPERATURE_THRESHOLD || windSpeed >= WIND_THRESHOLD) {
+  if (!sunLight || mmRain >= 0.1f || temperature <= TEMPERATURE_THRESHOLD || windSpeed >= WIND_THRESHOLD || rainChance >= RAIN_CHANCE_THRESHOLD) {
     closeShades();
   }
   else {
@@ -180,7 +183,28 @@ float getValueFromJson(String json, String needle) {
 
   // Yay now try parsing a number
   String floatMatch = "";
-  //Serial.println("Starting search for float");
+  for (; pos <= json.length(); pos++) {
+    if (charInString(json[pos], FLOATCHARS)) {
+      floatMatch += json[pos];
+    }
+    else if (floatMatch != "") {
+      return floatMatch.toFloat();
+    }
+  }
+  return FAIL_FLOAT;
+}
+
+float getValueFromJsonSimple(String json, String needle) {
+  // First look for the expected param from position 0
+  unsigned int pos = getPosition(json, needle, 0);
+
+  // Failure!
+  if (pos == 0) {
+    return FAIL_FLOAT;
+  }
+
+  // Yay now try parsing a number
+  String floatMatch = "";
   for (; pos <= json.length(); pos++) {
     if (charInString(json[pos], FLOATCHARS)) {
       floatMatch += json[pos];
