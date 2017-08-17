@@ -8,6 +8,8 @@
 #define WIND_THRESHOLD 25.0f
 #define FAIL_FLOAT 200.0f
 #define RAIN_CHANCE_THRESHOLD 40.0f
+#define MIN_UV_INDEX 2
+#define MAX_CLOUD_COVER 90.0f
 
 #define UP_GPIO 14
 #define DOWN_GPIO 12
@@ -89,14 +91,18 @@ void loop() {
   float windSpeed = getValueFromJson(line, "Wind");
   bool sunLight = getPosition(line, "true", 0) || 0;
   float rainChance = getValueFromJsonSimple(line, "RainProbability");
+  float uvIndex = getValueFromJsonSimple(line, "UVIndex");
+  float cloudCover = getValueFromJsonSimple(line, "CloudCover");
   
   printVar("temp: ", temperature);
   printVar("wind: ", windSpeed);
   printVar("rain: ", mmRain);
   printVar("rain %", rainChance);
+  printVar("cloud %", cloudCover);
+  printVar("uvIndex", uvIndex);
   printVar("isDay: ", sunLight);
 
-  if (temperature == FAIL_FLOAT || mmRain == FAIL_FLOAT || rainChance == FAIL_FLOAT) {
+  if (temperature == FAIL_FLOAT || mmRain == FAIL_FLOAT || rainChance == FAIL_FLOAT || MAX_CLOUD_COVER == FAIL_FLOAT) {
     Serial.println("Parsing failed, closing shades as best effort");
     closeShades();
     ESP.deepSleep(15*60*1e6); // once per 15 minutes
@@ -105,7 +111,9 @@ void loop() {
 
   // Close shades when there is not sunLight, there might be rain or
   // the temperature is to low
-  if (!sunLight || mmRain >= 0.1f || temperature <= TEMPERATURE_THRESHOLD || windSpeed >= WIND_THRESHOLD || rainChance >= RAIN_CHANCE_THRESHOLD) {
+  if (!sunLight || mmRain >= 0.1f || temperature <= TEMPERATURE_THRESHOLD || 
+      windSpeed >= WIND_THRESHOLD || rainChance >= RAIN_CHANCE_THRESHOLD  ||
+      uvIndex <= MIN_UV_INDEX || cloudCover >= MAX_CLOUD_COVER) {
     closeShades();
   }
   else {
