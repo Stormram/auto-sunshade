@@ -4,16 +4,15 @@
 #include "keys.h"
 
 #define FLOATCHARS "01234567890."
-#define TEMPERATURE_THRESHOLD 18.0f
+#define TEMPERATURE_THRESHOLD 16.5f
 #define WIND_THRESHOLD 25.0f
 #define FAIL_FLOAT 200.0f
 #define RAIN_CHANCE_THRESHOLD 40.0f
 #define MIN_UV_INDEX 2
 #define MAX_CLOUD_COVER 90.0f
 
-#define UP_GPIO 14
-#define DOWN_GPIO 12
-
+#define UP_GPIO 12
+#define DOWN_GPIO 14
 /**
  * {locationKey} as last param of url
  * GET: "http://dataservice.accuweather.com/forecasts/v1/hourly/1hour/{location_id}"
